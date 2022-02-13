@@ -1,0 +1,1617 @@
+'********************************************************************************
+'*																				*
+'*                               B  O  N  D                	                    *
+'*																				*
+'*                            Adventure tables                                  *
+'*                      written by anaonymous programmer                        *
+'*                                                                              *
+'*                     for the Gigatron TTL Computer System                     *
+'*                                                                              *
+'*                          ported from TRS-80                                  *
+'*                                                                              *
+'*                        by W A Bushby (February 2022)                         *
+'*                                                                              *
+'*                             version 0.88                                     *
+'*                                                                              *
+'*                                                                              *
+'*                      Based on Scott Adam's Source Code                       *
+'*                   published in Byte magazine December 1980                   *
+'*                                                                              *
+'*                                                                              *
+'********************************************************************************
+_runtimePath_ "../runtime"
+_runtimeStart_ &hFFFF
+_arraysStart_ &hFFFF
+_codeRomType_ ROMv5a
+
+
+'audio fix for ROMv5a
+POKE &h21, peek(&h21) OR 3
+
+SOUND OFF
+
+MODE 1
+SET FGBG_COLOUR, &h3F00
+CLS
+
+'********************************************************************************
+'*																				*
+'*                  DATA DEFINITIONS FOR THE ADVENTURE                          *
+'*																				*
+'********************************************************************************
+
+TITLE$ = "007 BOND"
+
+const IL = 60               ' Item Count
+const CL = 137              ' Action Count
+const NL = 139              ' Verb/Noun Count
+const RL = 55               ' Room Count
+const MX = 7                ' Maximum Carry Load Count
+const AR = 1                ' Initial Room Number
+const TT = 0                ' Treasure Count
+const LN = 3                ' Used Command Word Length
+const LT = 30000            ' Light Time
+const ML = 80               ' Message Count
+const TR = 0                ' Treasure room
+const OL = 7                ' One Letter Command Count
+const LV = 56               ' LOOK verb
+const IN = 68               ' INVENTORY noun
+
+NoLineBreak = 0
+
+Debug = 0
+
+    DIM NV(1)
+    DIM NT$(1)  
+    DIM I2%(IL) 
+
+                    ' Vocab, Condition(1-5),Action(1-2)  Vocab = (Verb X 150) + Noun
+                                                                     
+                                                                ' RANDOM TRIGGERED EVENTS
+
+    DIM CA(CL,7) = {100,764,169,160,780,780,6058,9300,          ' Is this the Private Library ? then Move Portal Here
+                    100,622,1024,100,0,0,8700,0,                ' Is this Bottom of Ledge and Been Bag Chair is here then set Flag 5 TRUE
+                    100,168,724,0,0,0,6238,9213,                ' If Main Corridor and Flag 8 = ON then Rocket Takes off and I am DEAD
+                    25,49,773,428,0,0,5938,9213,                ' 25% Flag 2 is OFF and Portal is Not hidden theb I am DEAD
+                    100,349,560,20,60,0,8187,8100,              ' Flag 17 is OFF then Save Room = Helecopter over Spectre then JUMP to Entrance Hall
+                    100,349,340,0,0,0,16408,11850,              ' Flag 17 is OFF then Print 'Welcome message ..'
+                    100,284,0,0,0,0,8614,0,                     ' If Stairwell the Unset DARK and print Room Info
+                    100,864,0,0,0,0,8464,0,                     ' If this is Storage Area then Set DARK and print Room Info
+                    100,188,507,180,0,0,12064,9000,             ' Flag 9 ON and NOT in Helicopter then Jump to Saved Room set Flag 9 OFF
+                    100,564,140,560,360,140,8180,8162,          ' If in Helicopter over Spectre then put Helicopter on South of Hanger
+                    100,544,660,540,360,660,8180,8162,          ' If in Helicopter below roof then put Helicopter in Small Landing area
+                    100,524,340,520,360,340,8180,8162,          ' If in helicopter over pit then put Helicopter in North end of pit
+                    100,584,40,580,360,40,8180,8162,            ' If in Helicopter over Spectre then put in Desert
+                    25,234,200,140,0,0,9300,0,                  ' 25% If Body is hidden then put JAWS in South end of hanger
+                    30,234,202,365,229,0,6667,13200,            ' 30% If Body is HIDDEN and JAWS is here I am thrown across room
+                    20,234,8,0,0,0,13261,9450,                  ' 20% If Body is hidden and JAWS threw me then I am dead
+                    1,234,205,147,388,200,6503,0,               ' 1% If Body is hidden and JAWS is NOT here move JAWS here
+                    100,220,420,0,0,0,10260,8700,               ' Set Flag 0 and 11 OFF, set flag 21 ON
+                    100,234,144,200,140,0,9300,0,               ' If I am in South of Hanger then move JAWS here
+                    100,202,380,0,0,0,8700,0,                   ' If JAWS is here set Flag 19 ON
+
+                                                                ' ACTION TRIGGERED EVENTS
+
+                    4238,521,164,520,20,0,205,12300,            '28/38 = INSERT/FUEL = Add 1 to Current COunter
+                    4247,641,164,640,20,0,205,12300,            '28/47 = INSERT/BATTERY = Add 1 to Current COunter 
+                    4258,821,164,820,20,0,205,12300,            '28/58 = INSERT/SPARK PLUG = Add 1 to Current COunter 
+                    1969,202,120,220,0,0,6667,8158,             '13/19 = ATTACK/MAN = PRINT 'Heavy I Can't Throw That' 
+                    4060,922,920,1140,0,0,6972,0,               '27/10 = KICK/DOOR = Swap Door to Open Door
+                    3900,444,89,0,0,0,6838,9213,                '26/0 = SWING = If Small Observation Deck then I am eaten and die
+                    3900,444,460,0,0,0,204,0,                   '26/0 = SWING = If Small Observation Deck then Jump to Room 23 Well Furnished Guest House
+                    3900,464,440,0,0,0,204,0,                   '26/0 = SWING = If Well furnished Guest house then Jump to Small Observation Desk
+                    3900,1022,1060,0,0,0,204,0,                 '26/0 = SWING = If Bottom of Ledge then Jump to Other Ledge
+                    3051,702,10,0,0,0,6300,0,                   '20/51 = PULL/LEVER = In Airlock then PRINT 'I need both hands'
+                    3060,881,202,0,0,0,5550,0,                  '20/60 = PULL/PROD = If Gun is held and in War Room then PRINT 'It tickles him'
+                    3060,881,0,0,0,0,5400,0,                    '20/60 = PULL/PROD = If Gun is held then PRINT 'PROD Emits a huge spark'
+                    3052,742,765,49,760,420,5135,8010,          '20/52 = PULL/WHEEL = If Large Wheel is here then Open Portal (with Guards)
+                    3052,742,765,760,0,0,5153,0,                '20/52 = PULL/WHEEL = If Large Wheel is here then Open Portal (No guards)
+                    3052,742,762,760,0,0,5005,0,                '20/52 = PULL/WHEEL = If Large Wheel is here and Portal is Open then close Portal
+                    3051,702,20,200,180,0,4887,8760,            '20/51 = PULL/LEVER = In Airlock then Helicopter takes off
+                    3050,682,0,0,0,0,4738,13238,                '20/50 = PULL/VALVE = If Valve is here then PRINT 'Nerve Gas begins to hiss'
+                    3038,522,108,1064,520,1020,4412,0,          '20/38 = PULL/FUEL CELL = Move cell to Generator Room
+                    3038,522,1064,520,840,0,4562,0,             '20/38 = PULL/FUEL CELL = Falls and shatters into a million pieces
+                    3038,522,0,0,0,0,150,0,                     '20/38 = PULL/FUEL CELL = PRINT 'OK'
+                    3037,1022,1073,1060,0,0,203,0,              '20/37 = PULL/ROPE = Move Fuel cells to current room
+                    3037,1022,0,0,0,0,150,0,                    '20/37 = PULL/ROPE = Print 'OK'
+                    3032,29,402,99,148,20,4258,0,               '20/32 = PULL/BUTTON = Launch Rocket
+                    3032,402,0,0,0,0,4050,0,                    '20/32 = PULL/BUTTON = PRINT 'Not ready for lift off'
+                    3031,382,980,380,140,0,222,8700,            '20/31 = PULL/HATCH = Close Hatch
+                    3031,982,980,380,140,0,222,9000,            '20/31 = PULL/HATCH = Open Hatch
+                    3010,922,0,0,0,0,300,0,                     '20/10 = PULL/DOOR = PRINT 'Its Locked'
+                    1357,22,0,0,0,0,3450,0,                     '9/7   = READ/SIGN = PRINT 'WELCOME TO SPECTRE HEADQUARTERS'
+                    1383,421,280,0,0,0,3808,0,                  '9/33  = READ/NOTICE = PRINT 'DEAR JAMES....'
+                    1379,341,0,0,0,0,3724,0,                    '9/29  = READ/PAPER = PRINT 'TO LAUNCH THE ROCKET...'
+                    1385,461,0,0,0,0,3900,0,                    '9/35  = READ/BOOK = PRINT 'Its a sleezy romance..'
+                    5100,41,0,0,0,0,3300,0,                     '34/0  = SIGN/- = PRINT 'The Pen is empty'
+                    1098,661,660,0,0,0,203,0,                   '7/48  = THROW/BALL = Leave deflated ball in current room
+                    1098,1101,765,0,0,0,538,9213,               '7/48  = THROW/BALL = Gas escapes, I'm Dead, Game Over
+                    1098,1101,762,1100,40,0,3205,8700,          '7/48  = THROW/BALL = Ball bounces through portal
+                    1074,261,202,260,0,0,3053,0,                '7/24  = THROW/DART = Dart bounces of JAWS
+                    1074,261,260,0,0,0,203,0,                   '7/24  = THROW/DART = PRINT 'OK'
+                    1050,0,0,0,0,0,2850,0,                      '7/0   = THROW/- = PRINT 'I can't throw that'
+                    7950,0,0,0,0,0,9900,0,                      '53/0  = INVENTORY/- List Inventory
+                    1507,0,0,0,0,0,9900,0,                      '10/7  = GET/INVENTORY = List Inventory
+                    1535,462,460,0,0,0,202,0,                   '10/35 = GET/BOOK = Pick up book
+                    1542,562,560,0,0,0,202,0,                   '10/42 = GET/GRILL = Pick up Grill
+                    1548,662,660,0,0,0,202,0,                   '10/48 = GET/BALL = Pick up Ball
+                    2742,561,585,560,0,0,203,0,                 '18/42 = DROP/BALL = Put ball down
+                    2721,221,447,220,0,0,203,0,                 '18/21 = DROP/BODY = Put Body Down
+                    2714,121,725,120,0,0,203,0,                 '18/14 = DROP/DRINK = Put DRink Down
+                    1537,502,500,0,0,0,202,0,                   '15/37 = GET/ROPE = Pick up Rope
+                    2742,561,582,560,1080,600,2753,10800,       '18/42 = DROP/GRILL = If on wires then short out electric fence
+                    2721,221,444,80,220,840,2608,9300,          '18/21 = DROP/BODY = If on patio then falls in water and sharks eat it
+                    2714,121,722,120,720,60,2455,8308,          '18/14 = DROP/DRINK = If RADAR is here then blow up RADAR
+                    1561,882,880,0,0,0,2302,0,                  '10/61 = GET/CATTLE PROD = Pick up PROD
+                    1548,1102,1100,0,0,0,202,0,                 '10/48 = GET/BALL = Pick up Ball
+                    1542,1122,560,540,1120,0,2174,10800,        '10/42 = GET/GRILL = Pick up Grill
+                    1538,1062,0,0,0,0,17400,0,                  '10/38 = GET/FUEL CELL = PRINT 'Its tied to pipe'
+                    1538,522,520,0,0,0,2002,0,                  '10/38 = GET/FUEL CELL = PRINT 'Heavy' then PICK UP Fuel cell
+                    1543,582,0,0,0,0,1138,9213,                 '10/43 = GET/WIRE = 'ZAP' I'm Dead
+                    2004,782,784,0,0,0,1800,0,                  '13/54 = ATTACK/DOCTOR = I go right through him.
+                    4226,301,164,300,20,0,205,12300,            '28/26 = INSERT/OXYGEN = Into Rocket Tube
+                    1535,1002,460,1000,440,0,202,10800,         '10/35 = GET/BOOK = Pick up Book
+                    7500,0,0,0,0,0,1650,0,                      '50/0 = FUCK/- = Print 'HEY! THIS IS A ~PG~ PROGRAM'
+                    1517,162,0,0,0,0,1500,0,                    '10/17 = GET/GIRL = Print 'Not my style'
+                    1512,182,180,0,0,0,1402,0,                  '10/12 = GET/LIGHT = Pick up light and it turns on
+                    213,902,120,420,400,160,204,9355,           '1/63 = GO/ENTRANCE = Jump to North of large hanger
+                    203,762,49,0,0,0,1288,9213,                 '1/53 = GO/PORTAL = Attacked by Guards, I am dead
+                    203,762,740,0,0,0,204,11400,                '1/53 = GO/PORTAL = Jump to main corridor
+                    194,602,0,0,0,0,1138,9213,                  '1/44 = GO/FENCE = Electrocuted, I am dead
+                    194,1082,884,900,1080,900,204,9300,         '1/44 = GO/FENCE = In Storage area so go to storage pen
+                    194,1082,904,880,1080,880,204,9300,         '1/44 = GO/FENCE = In Storage Pen so go to Storage Area
+                    190,521,542,0,0,0,750,0,                    '1/40 = GO/VENT = Holding Fuel Cells so Something is too big
+                    190,542,820,0,0,0,204,8614,                 '1/40 = GO/VENT = Go to ventillating shaft
+                    187,526,1042,860,0,0,204,11400,             '1/37 = GO/ROPE = Go to ledge over steep hole
+                    187,526,1022,1020,0,0,204,11400,            '1/37 = GO/ROPE = Go to bottom of ledge
+                    181,382,28,700,320,0,204,8026,              '1/31 = GO/HATCH = If Flag 1 is ON go to landing bay
+                    181,382,120,0,0,0,204,11400,                '1/31 = GO/HATCH = Go to North of large hanger
+                    180,202,0,0,0,0,900,0,                      '1/30 = GO/HELICOPTER = If JAWS here then he growls 'Only for Dr Yes'
+                    180,362,500,180,0,0,230,8158,               '1/30 = GO/HELICOPTER = Move to Helicopter
+                    7865,0,0,0,0,0,10650,0,                     '52/65 = SAVE/GAME = PRINT 'Not available right now'
+                    7200,0,0,0,0,0,9450,0,                      '48/0 = QUIT = Game Over
+                    175,962,306,300,0,0,204,11400,              '1/25 = GO/TUNNEL = Oxygen tank not held then go to dimly lit tunnel
+                    175,282,300,0,0,0,204,11400,                '1/25 = GO/TUNNEL = Go to dimly lit tunnel
+                    175,962,301,0,0,0,750,0,                    '1/25 = GO/TUNNEL = Oxygen tank held then 'Something is too big'
+                    172,242,0,0,0,0,688,9213,                   '1/22 = GO/PHOTO CELLS = I get stabbed and die
+                    160,1142,400,0,0,0,204,11400,               '1/10 = GO/DOOR = If open then Jump to War Room
+                    5885,461,764,200,780,200,7704,9300,         '39/35 = REP/BOOK = I fall through a trap door then Jump to Cockpit.  Dr. Yes Arrives
+                    4218,842,101,80,900,0,222,0,                '28/18 = INSERT/CARD = Open hanger door
+                    178,322,180,0,0,0,204,11400,                '1/28 = GO/ROCKET = Jump to Cockpit of Rocket
+                    4200,261,61,260,260,0,17305,8700,           '28/0 = INSERT/- = If holding blow dart then shot him with blow dart
+                    4512,181,242,240,0,0,7104,0,                '30/12 = AIM/LIGHT = If light held go passageway
+                    4512,181,0,0,0,0,150,0,                     '30/12 = AIM/LIGHT = Print 'OK'
+                    4964,121,120,140,0,0,7272,0,                '33/14 = DRINK/DRINK = Drink Martini
+                    5408,41,40,60,0,0,222,0,                    '36/8 = BREAK/PEN = Turn into hollow tube for blow dart
+                    5461,881,880,820,0,0,209,7950,              '36/61 = BREAK/CATTLE PROD = Produce Golden Gun
+                    5748,682,661,660,1100,0,7572,0,             '38/48 = INFLATE/BALL = If deflated ball held and valve is here inflate ball
+                    5885,461,442,420,460,0,7704,8323,           '39/35 = REPLACE/BOOK = Fall through trap door to secret passage
+                    0,440,1000,400,0,0,10858,0,                 'CONT = Put book on night table
+                    6167,162,369,100,360,0,15353,8700,          '41/17 = KISS/GIRL she swoons and cart appears in room
+                    6300,801,782,784,0,0,15900,0,               '42/0 = SHOOT/- = In library with Dr Yes, Shots go right through him
+                    6300,801,782,204,780,160,15822,13263,       '42/0 = SHOOT/- = In Cockpit with Dr Yes, He is killed and rocket takes off
+                    6300,801,0,0,0,0,15450,0,                   '42/0 = SHOOT/- = No Dr Yes then PRINT 'Bang'
+                    6300,61,269,0,0,0,15600,0,                  '42/0 = SHOOT/- = Holding tube then Print 'Its not loaded'
+                    6300,61,202,268,200,220,16122,0,            '42/0 = SHOOT/- = Holding tube and JAWS is here then kill JAWS
+                    6637,0,0,0,0,0,16200,0,                     '44/37 = TIE/ROPE = PRINT 'Be more specific'
+                    6636,482,501,500,480,1020,205,10800,        '44/36 = TIE/PIPE = Ties rope to pipe
+                    6638,1042,522,1060,520,0,222,0,             '44/38 = TIE/FUEL CELL = Ties rope to fuel cells
+                    6787,0,0,0,0,0,16200,0,                     '45/37 = UNTIE/ROPE = PRINT 'Be more specific'
+                    6786,1022,1065,500,1020,480,224,10800,      '45/36 = UNTIE/PIPE = Unties rope from pipe
+                    6788,1062,1060,520,0,0,222,0,               '45/38 = UNTIE/FUEL CELL = Inties rope from fuel cell
+                    6900,524,69,0,0,0,16588,9213,               '46/0 = LAND/- = In helicopter above pit. Lasers blast me out of the sky
+                    6900,208,20,180,0,0,237,8773,               '46/0 = LAND/- = In helicopter 
+                    0,500,200,0,0,0,8160,0,                     'CONT = Move to Cockpit of rocket
+                    8250,0,0,0,0,0,16650,0,                     '55/0 = EXAMINE/- = PRINT 'I see nothing special'
+                    7050,288,409,0,0,0,16800,0,                 '47/0 = HELP/- = If letter read, print 'I wondoer what she is trying to say' 
+                    7050,0,0,0,0,0,16950,0,                     '47/0 = HELP/- = print 'Now what would I do in this situation'
+                    3900,1042,0,0,0,0,17100,0,                  '26/0 = SWING/- = Rope hanging from ledge is here so say 'WHEE'
+                    6167,162,0,0,0,0,150,0,                     '41/17 = KISS/GIRL = Print 'OK'
+                    160,922,0,0,0,0,300,0,                      '1/10 = GO/DOOR = If closed then PRINT 'It's Locked'
+                    8400,0,0,0,0,0,11400,0,                     '56/0 = LOOK = Dislay room description
+                    1568,0,0,0,0,0,9900,0                       '10/68 = GET/INVENTORY = List items held
+                    }
+    
+const DIM OL$(OL) = "N","S","E","W","U","D","I","L"
+
+'   VERB/NOUN Command Table
+
+' The command table is a fix order set of VERB/NOUN pairs.  Do not delete or change any existing items.  Only add to the end as the position of the 
+' word is linked to the first column of the action table.
+
+const DIM NV$(NL) =   {"AUTO", "ANY", "GO", "NORTH", "*RUN", "SOUTH", "*WAL", "EAST", "*JUM", "WEST", "*CLI", "UP", "*ENT", 
+                    "DOWN", "THR", "SIG", "*TOS", "PEN", "REA", "TUB", "GET", "DOO", "*TAK", "*ROO", "*REM", "LIG", "ATT", "*FLA", "*KIL", "DRI", "*FIG",
+                    "*VOD", "*PUN", "*MAR", "*HIT", "GIR", "DRO", "CAR", "*LEA", "MAN", "PUL", "*JAW", "*PUS", "BOD", "*OPE", "PHO", "*CLO", "*PAS", "*TUR",
+                    "DAR", "*PRE", "TUN", "SWI", "OXY", "KIC", "*TAN", "INS", "ROC", "*LOA", "PAP", "AIM", "HEL", "*SHI" , "HAT", "*POI", "BUT", "DRI", "NOT",
+                    "SIG", "TAB", "*WRI", "BOO", "BRE", "PIP", "*DES", "ROP", "INF", "FUE" , "REP", "*CEL", "WAD", "VEN", "KIS", "*DUC", "SHO", "GRI", "*BLO", "WIR", "TIE", 
+                    "FEN", "UNT", "CUS", "LAN", "*CHA", "HEL", "BAT", "QUI", "BAL", "*END", "*BAS", "FUC", "VAL", "*SCR", "LEV", "SAV", "WHE", "INV",
+                    "POR", "*I", "DOC", "EXA", "*DR", "*LOO", "*YES", "", "GUN", "", "SPA", "", "*PLU", "", "SWI", "", "CAT", "", "*PRO", "", "ENT", "", "*HAM", "", "GAM", "",
+                    "SLO", "", "GLA", "", "INV", "", ""}
+
+' ROOM EXIT table
+
+' This is the inter room link.  ther are 6 paramtertes per room for North, South, East, West, Up, Down.
+' You cannot change this order as the rooms are used by position in the action table above.  Only add to the end.
+
+    DIM RM%(RL,5) = {0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0,
+                    30, 1, 2, 2, 0, 0, 1, 4, 0, 0, 0, 0, 
+                    3, 5, 0, 0, 0, 0, 4, 0, 18, 11, 0, 0,
+                    5, 7, 8, 0, 0, 0, 6, 0, 0, 0, 0, 0,
+                    0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 10, 0,
+                    0, 0, 0, 0, 0, 9, 0, 0, 5, 13, 0, 0, 
+                    0, 11, 0, 0, 0, 0, 0, 0, 11, 0, 0, 14, 
+                    0, 0, 0, 0, 13, 43, 0, 0, 14, 16, 0, 0, 
+                    17, 0, 0, 0, 0, 0, 0, 16, 0, 0, 0, 0,
+                    19, 0, 0, 5, 0, 0, 0, 18, 0, 0, 0, 0, 
+                    0, 0, 0, 18, 0, 0, 0, 0, 0, 0, 20, 22, 
+                    0, 0, 0, 0, 21, 0, 24, 0, 0, 0, 0, 0,
+                    0, 23, 0, 0, 0, 0,
+                    0, 0, 7, 0, 0, 0, 29, 29, 27, 29, 0, 0,
+                    29, 29, 28, 26, 0, 0, 29, 29, 29, 27, 0, 0,
+                    28, 29, 29, 29, 0, 0, 2, 2, 2, 2, 0, 0,
+                    0, 0, 17, 0, 0, 0, 0, 0, 33, 0, 0, 0,
+                    0, 0, 34, 0, 0, 0, 0, 0, 0, 33, 0, 0,
+                    0, 0, 36, 0, 0, 0, 0, 0, 0, 35, 0, 0,
+                    0, 40, 0, 36, 0, 0, 0, 39, 0, 0, 0, 0,
+                    38, 0, 0, 40, 0, 0, 37, 0, 39, 0, 0, 0,
+                    0, 0, 4, 0, 0, 54, 0, 0, 0, 0, 0, 0,
+                    0, 0, 47, 44, 14, 0, 0, 0, 43, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 48, 43, 0, 0, 49, 0, 0, 47, 0, 0,
+                    0, 48, 50, 0, 0, 0, 0, 0, 0, 49, 0, 0,
+                    0, 0, 0, 52, 0, 0, 0, 0, 51, 0, 0, 0,
+                    0, 54, 0, 0, 0, 0, 53, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0
+                    }
+
+' ROOM Description Table
+
+' This table is the room descriptions and exactly matches the order of the exit direction table above
+' You cannot change this order as the rooms are used by position in the action table above.  Only add to the end.
+
+const DIM RS$(RL) =  {"", "*I'M IN THE ENTRANCE HALL OF ~SPECTRE~ HEADQUARTERS", "DESERT",
+                    "RECEPTION AREA", "CORRIDOR", "PILOT'S READY ROOM", "*I AM IN THE NORTH OF A LARGE HANGER", 
+                    "*I AM IN THE SOUTH END OF A HANGER", "ROCKET CONTROL ROOM", "ROCKET",
+                    "COCKPIT OF A ROCKET. MOST OF THE INSTRUMENTS HAVE BEEN REMOVED",               ' 10 Rooms
+                    "WAR ROOM. ON THE WALL IS A STIRRING TRIBUTE TO GENERAL MOLITOV", 
+                    "*I'M IN AN AMMUNITIONS SUPPLY ROOM. IT APPEARS TO HAVE BEEN EMPTIED QUICKLY", 
+                    "*I'M IN AN UNFINISHED PORTION OF THE BUILDING. IN FRONT OF ME IS A RECENTLY DUG HOLE", 
+                    "CRUDELY BUILT STAIRWELL", "DIMLY LIT TUNNEL",
+                    "LARGE ROCKY PIT", "*I AM IN THE NORTH END OF THE PIT. THE FLOOR HAS BEEN CAREFULLY SMOOTHED OUT", 
+                    "*I AM IN THE PRIVATE SUITE OF DR. YES",
+                    "BAR", "BEDROOM", "SECRET PASSAGE UNDER THE BUILDING", 
+                    "*I AM ON A LARGE CONCRETE PATIO.  IN FRONT OF ME IS AN IMMENSE SHALLOW POND.",
+                    "SMALL OBSERVATION DECK", "WELL FURNISHED GUEST HOUSE", "HELICOPTER",                       ' 25 Rooms
+                    "HELICOPTER. BELOW I SEE A LARGE PIT.  GUARDING THE PIT ARE SEVERAL RADAR CONTROLLED LASERS",
+                    "HELICOPTER.  DIRECTLY BELOW IS THE ROOF OF THE BUILDING",
+                    "HELICOPTER FLYING HIGH OVER ~SPECTRE~ HEADQUARTERS. TO THE WEST IS A LARGE PIT",
+                    "HELICOPTER FLYING OVER THE DESERT", "*I AM STILL IN THE DESERT!", " ", " ", 
+                    "SMALL LANDING AREA ON THE ROOF", "*I AM ON THE ROOF. THE SURFACE IS EXTREMELY HOT",
+                    "LANDING BAY OF A SPACE STATION", "*I AM IN AN AIR LOCK",                                   ' 36 rooms
+                    "MAIN CORRIDOR. THE AIR HAS THE FAINT SCENT OF NERVE GAS.",
+                    "PRIVATE LIBRARY. THE WALLS ARE COVERED WITH EMPTY BOOK SHELVES.", "CONTROL ROOM",
+                    "MAIN CORRIDOR", "VENTILATING SHAFT. I SEE LIGHT UP AHEAD.",
+                    "", "*I'M ON A LEDGE IN FRONT OF A STEEP HOLE.", "STORAGE AREA",
+                    "STORAGE PEN", " ", "SERVICE TUNNEL", "TWISTING CORRIDOR", "LOCKER ROOM",
+                    "COMBINATION TORTURE CHAMBER/REC ROOM", "*I AM AT THE BOTTOM OF A LEDGE",
+                    "GENERATOR ROOM", "*I AM ON THE OTHER LEDGE", "FURNACE ROOM",
+                    "*~I'M DEAD~"
+                    }
+
+'Message Table
+
+' You cannot change this order as the rooms are used by position in the action table above.  Only add to the end.
+
+const DIM MS$(ML) =  {"*** INVALID MESSAGE ***",
+                    "OK",
+                    "IT'S LOCKED.",
+                    "THE GAS ESCAPES!!",
+                    "I'M PIN CUSHIONED!!",
+                    "SOMETHING IS TOO BIG.",
+                    "TINSEL TEETH GROWLS AND SAYS: ~MACHINE ONLY FOR DR. YES AND SECRETARY!~",
+                    "~*-*-* Z O R C H *-*-*~ YOU HAVE REDUCED THIS MAGNIFICANT BODY TO ASHES!",
+                    "THE GUARDS LET ME HAVE IT!",
+                    "THE LIGHT TURNS ON.",
+                    "AN INTERESTING THOUGHT BUT NOT MY STYLE (SORRY).",
+                    "HEY! THIS IS A ~PG~ PROGRAM.",
+                    "I GO RIGHT THROUGH HIM!",
+                    "HEAVY!",
+                    "WITH BRUTE FORCE I PULL IT OFF.",
+                    "TO USE: ~PRESS SWITCH~",
+                    "~*-*-* B O O M *-*-*~ (OF COURSE MY HAIR REMAINS PERFECTLY COMBED)",
+                    "IT SLIDES INTO THE POND AND THE SHARKS BEGIN TO FEAST.",
+                    "~*-*-* Z A P *-*-*",
+                    "I CAN'T THROW THAT.",
+                    "BOING. IT JUST BOUNCES OFF HIM.",
+                    "IT BOUNCES THROUGH THE PORTAL.",
+                    "HMM... THE PEN IS EMPTY.",
+                    "~---WELCOME TO SPECTRE HEADQUARTERS--- ~ALL VISTORS MUST SIGN IN!~",
+                    "TO LAUNCH THE ROCKET THE FOLLOWING ITEMS MUST BE ~INSERTED~ INTO THE TUBE:",
+                    "DEAR JAMES. I AM SORRY BUT I MUST REJOIN ~SPECTRE~. DEFECTOIN WOULD COST MY PENSION.",
+                    "IT'S A SLEEZY ROMANCE TITLED ~MY HEART.~",
+                    "NOT READY FOR LIFT OFF.",
+                    "~*-*-* W H O O S H *-*-*~ ROCKET LIFTS OFF AND DOCKS WITH A SMALL ORBITTING SPACE STATION.",
+                    "THUMP",
+                    "IT SLIDES OVER THE EDGE AND SHATTERS INTO A MILLIN PIECES!",
+                    "NERVE GAS BEGINS TO HISS INTO THE ROOM!",
+                    "HELICOPTER TAKES OFF!",
+                    "PORTAL CLOSES.",
+                    "A PORTAL OPENS.",
+                    "I SEE A HALL CRAWLING WITH GUARDS.",
+                    "PROD EMITS A HUGE SPARK!",
+                    "IT TICKLES HIM.",
+                    "IT AUTOMATICALLY SHUTS OFF (WHEW!).",
+                    "GUARDS STORM IN!!",
+                    "I HEAR FIENDISH LAUGHTER IN THE NEXT ROOM.",
+                    "ROCKET TAKES OFF AS I ENTER THE BAY! I HEAR MORE FIENDISH LAUGHTER OVER A LOUD SPEAKER.",
+                    "I NEED BOTH HANDS.",
+                    "OH OH, BETTER LEAVE!",
+                    "I'M THROWN ACROSS THE ROOM!",
+                    "I WAS A NICE LITTLE SNACK.",
+                    "CRUNCH.",
+                    "I SHINE IT ON THE PHOTOCELLS AND WALK THROUGH.",
+                    "~WOW~!! THAT WAS POWERFUL. IT ALMOST TASTED LIKE GASOLINE.",
+                    " ",
+                    "~SSSSSSS~",
+                    "I FALL THROUGH A TRAP DOOR!",
+                    "THE GIRL SWOONS! SHE SAYS SHE SEES THE ERROR IN HER WAYS AND WILL NOW JOIN IN THE FIGHT",
+                    "BANG",
+                    "IT'S NOT LOADED.",
+                    "~BANG~. GOT HIM! THE ROCKET TAKES OFF ON ITS ~LONG~ VOYAGE HOME...",
+                    "SHOTS GO RIGHT THROUGH HIM?!",
+                    "A PERFECT SHOT! I GUESS HE GOT THE POINT.",
+                    "BE MORE SPECIFIC.",
+                    "WELCOME TO ~JAMES BOND ADVENTURE~",
+                    "THE LASERS BLAST ME OUT OF THE SKY.",
+                    "I SEE NOTHING SPECIAL.",
+                    "HMM... I WONDER WHAT SHE WAS TRYING TO SAY IN THAT LETTER.",
+                    "HMM...NOW WHAT WOULD I DO IN THIS SITUATION.",
+                    "WEE!!",
+                    "TUBE IS LOADED.",
+                    "ITS TIED TO THE PIPE.",
+                    "",
+                    "",
+                    "",
+                    "A TUBE IS JUTTING OUT OF THE WALL WITH THE WORDS ~ROCKET SUPPLY TUBE~ PAINTED ON THE SIDE",
+                    "THE FLOOR HAS BEEN CAREFULLY SMOOTHED OUT",
+                    "IT SEEMS HARMLESS EXCEPT FOR THE RARE DWARF SHARKS THAT DR. YES RAISES",
+                    "I CANNOT SEE THE BOTTOM OR WHAT IS OVER ON THE OTHER SIDE",
+                    "OXYGEN TANK", "FUEL CELLS", "BATTERY", "SPARK PLUG",
+                    "I MUST TRY TO REPLACE MY HEART AND LEAVE YOU. LOVE, SCANTILLY CLAD GIRL",
+                    "FOR TRUTH AND JUSTICE. SHE ALSO DROPS SOMETHING. (WHEN YOU'VE GOT IT YOU GOT IT!)",
+                    "BUY A ~GIGATRON~ COMPUTER TODAY."
+                    }
+                 
+' Object description table
+
+' You cannot change this order as the rooms are used by position in the action table above.  Only add to the end.
+
+const DIM IA$(IL) = {"", "A SIGN", "A LARGE FOUNTAIN PEN/PEN/", "A HOLLOW TUBE/TUB/",
+                    "A LARGE METAL HANGER DOOR", "A SMALL METAL CART/CAR/",                                 ' 6 items
+                    "A VODKA MARTINI (SHAKEN NOT STIRRED)/DRI/", "AN EMPTY GLASS/GLA/", 
+                    "A SCANTILLY CLAD GIRL", "A FLASHLIGHT/LIG/", 
+                    "A LARGE MAN WITH METAL TEETH", "A BODY/BOD/", 
+                    "A SPIKED PASSAGE LINED WITH A PHOTOCELL", "A POISENED BLOW DART/DAR/",                 ' 14 items
+                    "A WESTWARD TUNNEL", "AN OXYGEN TANK/OXY/", "A SMALL TRANSPORT ROCKET",  
+                    "A SLIP OF PAPER/PAP/", "A HELICOPTER", "AN OPEN HATCH", "A SMALL FIRING BUTTON",
+                    "A NOTE/NOT/", "A NIGHT TABLE", "A BOOK/BOO/", "SOME PIPING RUNNING OVERHEAD",          ' 25 items
+                    "SOME COILED ROPE/ROP/", "LARGE FUEL CELLS/FUE/", "AN OPEN VENTILATING DUCT",
+                    "A HEAVY METAL GRILL", "TWO BARE LIVE WIRES", "AN ELECTRIFIED FENCE", 
+                    "A LARGE BEAN BAG CHAIR/CUS/", "A BATTERY/BAT/", " A DEFLATED BASKET BALL/BAL/",
+                    "A VALVE", "A LEVER", "A RADAR", "A LARGE WHEEL ATTACHED TO THE WALL",                  ' 38 items
+                    "A PORTAL", "THE FIENDISH DR. YES", "A GOLDEN GUN/GUN/",
+                    "A LARGE SPARK PLUG/SPA/", "A SLOT IN THE WALL", "",
+                    "A CATTLE PROD/CAT/", "THE ENTRANCE TO THE HANGER", "A DOOR",
+                    "", "A TUNNEL", "A CLOSED HATCH", "A BOOK ON A NIGHT TABLE",                            ' 50 ITEMS
+                    "PIPING WITH ROPE TIED TO IT", "A ROPE HANGING DOWN FROM THE LEDGE",
+                    "FUEL CELLS TIED TO A ROPE", "A FENCE", "AN INFLATED BASKET BALL/BAL/",
+                    "A VENTILATING DUCT WITH A METAL GRILL", "AN OPEN DOOR HANGING AJAR",
+                    "A PAINTED MESSAGE THAT SAYS: PORTED TO ~GIGATRON~ BY W. BUSHBY (2022)",
+                    "", ""
+                    }
+
+'Object location table
+
+' This table is linked to the table above
+' You cannot change this order as the rooms are used by position in the action table above.  Only add to the end.
+
+    DIM IA%(IL) =  {0, 3, 3, 0, 5, 0, 19, 0, 20, 21, 7, 0, 11, 12, 14, 16, 6, 8, 7, 9, 10, 0, 0, 0, 43, 49, 53, 0, 0, 
+                    52, 44, 24, 45, 24, 50, 25, 34, 36, 0, 0, 38, 42, 5, 0, 50, 0, 18, 0, 16, 0, 20, 0, 51, 0, 0, 0, 
+                    54, 0, 0, 0, 0}
+
+
+const HELD = 255
+const NONSET = 255
+
+'********************************************************************************
+'*																				*
+'*                          PROGRAM FLAGS & COUNTERS                            *
+'*																				*
+'********************************************************************************
+
+'Flag  0 = Attacked by JAWS
+'Flag  1 = Rocket is in flight
+'Flag  2 = Basket ball has been thrown through portal
+'Flag  3 = RADAR has been damaged
+'Flag  4 = Body has been dumped into pond
+'Flag  5 = Bean Bag chair is on bottom of ledge
+'Flag  6 = 
+'Flag  7 = Rocket has been launched
+'Flag  8 = Dr Yes is in Rocket cockpit
+'Flag  9 = I am in helicopter
+'Flag 10 = Helicopter is in flight
+'Flag 11 = 
+'Flag 12 = 
+'Flag 13 = JAWS has been killed
+'Flag 14 = 
+'Flag 15 = 
+'Flag 16 = 
+'Flag 17 = Welcome message has been printed
+'Flag 18 = Girl has been kissed 
+'Flag 19 = JAWS is in current room
+'Flag 20 = Book has been picked up
+'Flag 21 = Portal is open
+'Flag 22 = 
+'Flag 23 = 
+'Flag 24 = 
+
+'CurrentCounter = number of items inserted into rocket tube.  4 required to launch rocket
+
+'********************************************************************************
+'*																				*
+'*                          PROGRAM INITIALISATION                              *
+'*																				*
+'********************************************************************************
+
+    SET FG_COLOUR, 57
+
+    DIM Counters(16) = 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    DIM SpecialFlags%(32) = 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+    DIM SavedRooms%(RL) = 0
+
+    Z$="I'VE TOO MUCH TOO CARRY.  TRY -TAKE INVENTORY-" 
+
+    UL$ = "========================="
+
+    FOR X=0 TO IL
+        I2(X)=IA(X)
+    NEXT X
+
+    GOTO SkipSave
+
+'********************************************************************************
+'*																				*
+'*                          Introduction Screen                                 *
+'*																				*
+'********************************************************************************
+
+STARTSCREEN:
+    CLS 
+    SET BG_COLOUR, 0
+    SET FG_COLOUR, 57
+
+    TL = 26-LEN(TITLE$)
+    AT (TL*6)/2, 0:PRINT TITLE$
+    PRINT
+    SET FG_COLOUR, 58
+    PRINT " Unless told differently  you must find ";
+    SET FG_COLOUR, 11
+    PRINT "TREASURES";
+    SET FG_COLOUR, 58
+    PRINT "   and return them to their  proper place!" 
+    PRINT:PRINT "I'm your puppet. give me  English commands that     consist of a noun and verb"
+
+    GOSUB WaitAnyKey
+
+
+    CLS
+    PRINT "Some examples..."
+    PRINT
+    PRINT "To find out what you're   carrying you might say :  ";
+    SET FG_COLOUR, 28
+    PRINT "TAKE INVENTORY"
+    SET FG_COLOUR, 58
+    PRINT "To go into a hole you     might say : ";
+    SET FG_COLOUR, 28
+    PRINT "GO HOLE"
+    SET FG_COLOUR, 58
+    PRINT
+    PRINT "Directions, Inventory and Look can be used with the single first letters"
+
+    GOSUB WaitAnyKey
+
+    CLS
+    PRINT
+    PRINT "If you are stuck, type "
+    SET FG_COLOUR, 28
+    PRINT "HELP"
+    SET FG_COLOUR, 58
+    PRINT
+    PRINT "You will at times need    special items to do things but I'm sure you'll be a good Adventurer";
+    PRINT " and figure these things out."
+    PRINT 
+    PRINT "Happy Adventuring..."
+
+    GOSUB WaitEnter
+
+    CLS
+
+    RETURN
+
+'********************************************************************************
+'*																				*
+'*                          PROGRAM LOGIC                                       *
+'*																				*
+'********************************************************************************
+
+SkipSave:
+
+    WaitCLS = 0
+    SavedRoom = AR
+
+    X%=0
+    Y%=0
+    Z%=0
+    KK%=0
+    R%=AR
+    V%=0
+    N%=0
+    LL%=0
+    F%=0
+
+    K$ = " "
+    TP$=K$
+    
+    IP%=0
+    P%=0
+    LX%=LT 
+
+    DF=0
+    DONEXT = 0
+
+    CURCOUNT = 0
+
+    FOR I=0 TO 16
+        Counters(I) = 0
+    NEXT I
+
+    FOR I=0 TO 32
+        SpecialFlags(I) = 0
+    NEXT I
+
+    FOR I=0 TO RL
+        SavedRooms(I) = 0
+    NEXT I
+
+    FOR X=0 TO IL
+        I2(X)=IA(X)
+    NEXT X
+
+    GOSUB STARTSCREEN
+
+    GOSUB WHEREAMI
+
+    GOTO SKIPINPUT
+
+'********************************************************************************
+'*																				*
+'*                          INPUT AND PROCESS CONTROL                           *
+'*																				*
+'********************************************************************************
+
+GETINPUT:
+    SET FG_COLOUR, 56
+
+    PRINT
+    INPUT "TELL ME WHAT TO DO?";TP$
+ 
+    WaitCLS = 0
+
+
+    SET FG_COLOUR, 58
+    PRINT
+    GOSUB FINDCOMMAND 
+
+    IF F <> 0 
+        Text$ = "YOU USE WORD(S) I DON'T KNOW"
+        GOSUB PrintLine
+        GOTO GETINPUT 
+    ENDIF
+
+    GOSUB ANALYSECOMMAND
+    
+    IF IA(9) = HELD 
+        LX=LX-1 
+        IF LX=0 
+            PRINT "LIGHT HAS RUN OUT"
+            IA(9) =0 
+        ELSEIF LX<25 
+            PRINT "LIGHT RUNS OUT IN " ;LX; " TURNS!"
+        ENDIF
+    ENDIF
+    
+
+SKIPINPUT:
+    NV(0)=0
+    GOSUB ANALYSECOMMAND
+    GOTO GETINPUT
+    
+'********************************************************************************
+'*																				*
+'*                          LOCATE COMMAND TABLE REFERENCE                      *
+'*																				*
+'********************************************************************************
+
+FINDCOMMAND:
+    
+    KK=0:XX=0
+    NT$(0)=" "
+    NT$(1)=" "
+    Verb$ = " "
+    Noun$ = " "
+
+    IF LEN(TP$) = 0 THEN RETURN
+
+    TP$=UCASE$(TP$)
+
+    ' 1 Letter Commands
+    XX=NONSET
+    IF LEN(TP$) = 1
+        FOR X=0 TO OL
+            IF TP$=OL$(X) THEN XX=X:X=OL
+        NEXT X
+    ENDIF
+    
+    IF XX <> NONSET
+        IF XX < 6 THEN NV(0) = 1:NT$(0) = "GO":NV(1) = XX+1:NT$(1) = NV$((XX+1)*2+1)
+        IF XX = 6 THEN NV(0) = 10:NT$(0) = "GET":NV(1) = IN:NT$(1) = NV$(IN*2+1)
+        IF XX = 7 THEN NV(0) = LV:NT$(0) = NV$(LV*2):NV(1) = 0
+
+        Verb$ = NT$(0)
+        Noun$ = NT$(1)
+
+        NT$(0) = LEFT$(NT$(0),LN)
+        NT$(1) = LEFT$(NT$(1),LN)
+
+        GOTO FindEnd
+    ENDIF
+
+    ' Normal Command Processing
+    
+    XX=0
+    FOR X=0 TO LEN(TP$)
+        K$=MID$(TP$, X, 1)
+        IF K$=" " 
+            NT$(KK) = LEFT$(TP$,X)
+            XX=X+1
+            KK=1 
+        ENDIF
+    NEXT X 
+
+    NT$(KK) = RIGHT$(TP$,LEN(TP$)-XX)
+
+    Verb$ = NT$(0)
+    Noun$ = NT$(1)
+
+    NT$(0) = LEFT$(NT$(0),LN)
+    NT$(1) = LEFT$(NT$(1),LN)
+
+    FOR X=0 TO 1
+        NV(X)=0
+        IF NT$(X)=" " 
+            GOTO NXTX 
+        ELSE 
+            FOR Y=0 TO ((NL-1)/2)
+                K$=NV$(Y*2+X)
+                IF LEFT$(K$,1)="*" THEN K$=RIGHT$(K$,LEN(K$)-1) ' CHECK RIGHT n-1 characters
+        ENDIF
+             
+        IF X=1 
+            IF Y<7 
+                K$=LEFT$(K$, LN) 
+            ENDIF
+        ENDIF
+
+        IF NT$(X)=K$ 
+            NV(X)=Y
+        ELSE 
+            NEXT Y
+            GOTO NXTX
+        ENDIF
+
+DROPSTAR:                           'Drop alias and use main verb
+        IF LEFT$(NV$(NV(X)*2+X), 1) = "*" 
+            NV(X)=NV(X)-1 
+            GOTO DROPSTAR
+        ENDIF
+NXTX:
+    NEXT X                          ' Line 230
+
+FindEnd:    
+    F = (NV(0)<1) OR ((LEN(NT$(1))>1) AND (NV(1)<1))
+    RETURN 
+
+'********************************************************************************
+'*																				*
+'*                          DISPLAY LOCATION DATA                               *
+'*																				*
+'********************************************************************************
+
+WHEREAMI:
+    IF DF
+        IF (IA(9)<>HELD) AND (IA(9) <> R) 
+            PRINT "I CAN'T SEE, ITS TOO DARK."
+            WAIT(100)
+            RETURN
+        ENDIF
+    ENDIF
+
+    KK=NONSET
+    
+    SET FG_COLOUR, 19
+
+    IF LEFT$(RS$(R),1)="*" 
+        LL = LEN(RS$(R))-1
+        Text$ = RIGHT$(RS$(R),LL)
+    ELSE 
+        Text$ = "I'M IN A " + RS$(R)
+    ENDIF
+
+    GOSUB PrintLine
+    'PRINT "SF=";:FOR I=0 TO 20:PRINT SpecialFlags(I);:NEXT I
+    SET FG_COLOUR, 59
+    PRINT UL$
+    SET FG_COLOUR, 58
+
+    COM=NONSET
+    FOR Z=0 TO IL
+        IF KK <> 0
+            IF IA(Z)=R 
+                SET FG_COLOUR, 28
+                PRINT "VISIBLE ITEMS HERE:"
+                SET FG_COLOUR, 58
+                KK=0
+            ENDIF
+        ENDIF
+
+        GOTO PRINTITEMS
+
+STRIPSLASH:
+        TP$=IA$(Z)
+        IF RIGHT$(TP$,1) = "/" 
+            FOR W=1 TO LEN(IA$(Z))
+                IF MID$(IA$(Z),W,1) = "/" 
+                    W = LEN(IA$(Z))
+                ELSE 
+                    TP$ = LEFT$(IA$(Z),W+1)
+                    NEXT W
+                ENDIF
+        ENDIF
+        RETURN
+
+PRINTITEMS:                         ' Line 300
+        IF IA(Z)<>R 
+            GOTO SKIPPRINTITEMS 
+        ELSE 
+            GOSUB STRIPSLASH
+            IF LEN(TP$)+3 > 63 THEN PRINT 
+        ENDIF
+
+        IF COM <> NONSET THEN PRINT ", ";
+        Text$ = TP$
+        NoLineBreak = 1
+
+            GOSUB PrintLine
+        NoLineBreak = 0
+        
+        COM=Z
+
+
+SKIPPRINTITEMS:
+    NEXT Z 
+    PRINT 
+
+    KK=NONSET:
+    FOR Z=0 TO 5 
+        IF KK <> 0
+            IF RM(R, Z) <> 0 
+                SET FG_COLOUR, 28
+                PRINT "OBVIOUS EXITS: "
+                SET FG_COLOUR, 58
+                KK=0 
+            ENDIF
+        ENDIF
+        IF RM(R,Z) <> 0 THEN PRINT NV$((Z+1)*2+1);" "; 
+    NEXT Z
+    
+    PRINT 
+    PRINT
+    
+    RETURN 
+
+'********************************************************************************
+'*																				*
+'*                       ANALYSE COMMAND AND PROCESS INSTRUCTIONS               *
+'*																				*
+'********************************************************************************
+
+ANALYSECOMMAND:                 ' Line 360
+    F2=NONSET
+    F=NONSET
+    F3=0
+
+    IF NV(0)=1 AND NV(1)<7      ' GO NORTH.....DOWN
+        GOTO J610 
+    ELSE 
+ACTIONLOOP:
+        X=X+1
+        V=CA(X, 0)/150
+
+        IF NV(0)=0 
+            IF V<>0 THEN RETURN 
+        ENDIF
+    ENDIF
+
+    IF NV(0)<>V 
+        GOTO DOLOOPX
+    ELSE 
+        N=CA(X,0)-(V*150)
+    ENDIF
+
+    IF CA(X, 0)=0 AND DONEXT = 0 THEN GOTO DOLOOPX         ' Added In Strange Odyssey to fix random Jumps to other rooms
+
+    IF NV(0)=0 
+        F=0
+        RR=RND(100)
+        IF RR <= N
+            GOTO J400 
+        ELSEIF DONEXT > 0
+            IF CA(X+1,0) <> 0 THEN DONEXT=0
+            GOTO J400
+        ELSE 
+            GOTO DOLOOPX
+        ENDIF
+    ENDIF
+
+    IF N<>NV(1) AND N<>0 
+        GOTO DOLOOPX
+    ENDIF
+
+J400:
+    JP = 0
+    F2=NONSET: F=0: F3=NONSET
+    
+    FOR Y=1 TO 5
+        W=CA(X,Y)
+        LL=W/20
+        KK=W-(LL*20)
+        F1=NONSET 
+        
+        ON KK+1 GOTO J9000,J550,J430,J450,J470,J490,J500,J510,J520,J530,J540,J410,J420,J440,J460,J480,J541,J542,J543,J544,J545       'KK=19 only
+
+J410:                ' (10)Carrying Somthing ?
+    F1=NONSET
+    FOR Z=0 TO IL
+        IF IA(Z)=HELD 
+            GOTO J550 
+        ELSE 
+            NEXT Z
+        ENDIF
+
+        F1=0 
+        GOTO J550 
+J420:                ' (11)Not Carrying Anything ?
+    F1=0
+    FOR Z=0 TO IL
+        IF IA(Z)=HELD 
+            GOTO J550 
+        ELSE 
+            NEXT Z
+        ENDIF
+
+        F1=NONSET
+        GOTO J550 
+J430:               ' (1)Is Item Held ?                 () = KK
+    F1=(IA(LL)=HELD): GOTO J550 
+J440:               ' (12)Is item not held and not here ?
+    F1=(IA(LL)<>HELD) AND (IA(LL)<>R):GOTO J550 
+J450:               ' (2)Item in room
+    F1=(IA(LL)=R):GOTO J550 
+J460:               ' (13)Item not hidden
+    F1=(IA(LL)<>0):GOTO J550 
+J470:               ' (3)Is item held or in room ?
+    F1=(IA(LL)=R) OR (IA(LL)=HELD):GOTO J550 
+J480:               ' (14) Item is hidden ?
+    F1=(IA(LL)=0): GOTO J550 
+J490:               ' (4)Is it this room ?
+    F1=(R=LL):GOTO J550 
+J500:               ' (5)Is Item not here ?
+    F1=(IA(LL)<>R):GOTO J550
+J510:               ' (6)Is Item not held ?
+    F1=(IA(LL)<>HELD):GOTO J550
+J520:               ' (7)Not this room ?
+    F1=(R<>LL)
+    GOTO J550
+J530:               ' (8)Specified Flag is TRUE (SUPPORTS 32 FLAGS)
+    F1=SpecialFlags(LL)
+    F1=(F1<>0)
+    GOTO J550 
+J540:               ' (9)Specified Flag is FALSE (SUPPORTS 32 FLAGS)
+    F1=SpecialFlags(LL)
+    F1=(F1=0)
+    GOTO J550 
+
+J541:               ' (15) Counter is > LL
+    F1=NONSET
+    IF CURCOUNT > LL THEN F1=0
+    GOTO J550
+
+J542:               ' (16) Counter is <= LL
+    F1=NONSET
+    IF CURCOUNT <= LL THEN F1=0
+    GOTO J550
+
+J543:               ' (17) Item LL is NOT in orginal location
+    IF IA(LL) = I2(LL) THEN F1=0
+    GOTO J550
+
+J544:               ' (18) Item LL is in original location
+    IF IA(LL) <> I2(LL) THEN F1=0
+    GOTO J550
+
+J545:               ' (19) Current Counter = LL
+    F1=(CURCOUNT=LL)
+    GOTO J550
+
+
+J550:
+    F2=(F2 AND F1)
+    IF F2
+        GOTO DOLOOPY
+    ELSE 
+        GOTO DOLOOPX
+    ENDIF
+DOLOOPY:
+    NEXT Y
+
+    IP=0
+    FOR U=1 TO 4
+        KK=(U-1)/2+6
+
+        ON U GOTO J9000, J570, J580, J570, J580 
+
+J570:
+    IF X>CL THEN GOTO J960
+    AC=CA(X,KK) / 150: GOTO J590 
+J580:
+    IF X>CL THEN GOTO J960
+    AC=CA(X,KK) - ((CA(X,KK)/150)*150)
+
+J590:
+    'PRINT "X=";X;", AC=";AC:WAIT(100)
+    IF AC>101  
+        GOTO J600 
+    ELSEIF AC=0 
+        GOTO J960 
+    ELSEIF AC<52 
+        Text$ = MS$(AC)
+        NoLineBreak = 1
+            GOSUB PrintLine
+        NoLineBreak = 0
+
+        WaitCLS = 1
+
+        GOTO J960
+    ELSE 
+        IF (AC-51) > 38
+            PRINT "UNKNOWN COMMAND ROUTINE=";AC-51
+            GOTO J600
+        ENDIF
+        
+        ON AC-51 GOTO J9000, C52, C53, C54, C55, C56, C57, C58, C59, C60, C61, C62, C63, C64, C65, C66, C67, C68, C69, C70, C71, C72, C73, C74, C75, C76, C77, C78, C79, C80, C81, C82, C83, C84, C85, C86, C87, C88, C89
+J600:
+        Text$ = MS$(AC-50)
+        NoLineBreak = 1
+            GOSUB PrintLine
+        NoLineBreak = 0
+
+        WaitCLS = 1
+
+        GOTO J960 
+    ENDIF
+J610:                                           ' MOVE
+    L=DF
+    IF L THEN L = DF AND (IA(9) <> R) AND (IA(9) <> HELD)
+    IF L THEN PRINT "DANGEROUS TO MOVE IN THE DARK !":WAIT(100)
+
+    IF NV(1)<1 THEN PRINT "GIVE ME A DIRECTION TOO.":GOTO J1040 
+    KK=RM(R,NV(1)-1)
+
+    IF KK<1 
+        IF L 
+            PRINT "I FELL DOWN AND BROKE MY NECK.":KK=RL:DF=0
+        ELSE 
+            Text$ = "I CAN'T GO IN THAT DIRECTION" 
+            GOSUB PrintLine
+            GOTO J1040 
+        ENDIF
+    ENDIF
+
+    IF NOT L 
+        if WaitCLS > 0 THEN WAIT(100):WaitCLS = 0
+        CLS 
+    ENDIF
+
+    R=KK:GOSUB WHEREAMI:GOTO J1040
+C52:                                           ' (52) GET
+    L=0
+    FOR Z=1 TO IL
+        IF IA(Z)=HELD THEN L=L+1
+    NEXT Z
+
+    IF L>=MX 
+        Text$ = Z$
+        GOSUB PrintLine
+        GOTO J970
+    ENDIF
+
+    GOSUB J1050
+    IA(P)=HELD
+    GOTO J960
+
+C53:                                           ' (53) MOVE Item P to Current Room
+    GOSUB J1050
+    IA(P)=R
+    GOTO J960
+C54:                                           ' (54) MOVE ROOM
+    WAIT(50)                                   ' needed to stop crash !!
+    GOSUB J1050:
+    R=P
+    GOTO J960
+C55:                                       
+    WAIT(50)                                   ' needed to stop crash !!
+C59:                                            ' (59) Hide Item
+    GOSUB J1050
+    IA(P)=0
+    GOTO J960
+C56:                                           ' Set Dark 
+    DF=NONSET:GOTO J960
+C57:                                           ' (57) Unset Dark
+    DF=0:GOTO J960
+C58:                                           ' (58) 
+    GOSUB J1050
+C58B:                                          ' Set Bit Flag
+    'IF P=12 THEN PRINT "X=";X;", Set Flag ";P;" to TRUE"
+    SSF = SpecialFlags(P)
+    SpecialFlags(P) = 1
+    GOTO J960
+C60:                                           ' (60)
+    GOSUB J1050
+C60B:                                           ' Unset Bit Flag
+    'IF P=12 THEN PRINT "X=";X;", Set Flag ";P;" to FALSE"
+    SSF = SpecialFlags(P)
+    SpecialFlags(P) = 0
+    GOTO J960
+C61: 
+    PRINT "I'M DEAD...":R=RL:DF=0:GOTO C76
+
+C62:                                            ' (62) Item is moved to room
+    GOSUB J1050
+    L=P
+    GOSUB J1050
+    IA(L)=P
+    GOTO J960
+C63:                                           ' (63) game over message
+    PRINT
+    INPUT "THE GAME IS OVER, ANOTHER?";K$
+    
+    IF LEFT$(K$,1)="N" OR LEFT$(K$,1)="n"
+        END 
+    ELSE 
+        FOR X=0 TO IL
+            IA(X)=I2(X)
+        NEXT X
+        GOTO SkipSave
+    ENDIF
+
+C64:          
+    'PRINT "C64":WAIT(200)
+C76:                                            ' (76) show room data
+    IF WaitCLS > 0 THEN WAIT(100):WaitCLS = 0
+    CLS
+    GOSUB WHEREAMI
+    GOTO J960 
+
+C65:                                           ' Count Stored Treasure
+    L=0
+    FOR Z=1 TO IL
+        IF IA(Z)=TR 
+            IF LEFT$(IA$(Z),1)="*" THEN L=L+1
+        ENDIF
+    NEXT Z: 
+
+    TCL = GET("FG_COLOUR")
+
+    PRINT "I'VE STORED ";L;
+    
+    SET FG_COLOUR, 11
+        PRINT " TREASURES";
+    SET FG_COLOUR, TCL
+
+    PRINT ".  ON A SCALE OF 0 TO 100 THAT RATES AS ";
+
+    SET FG_COLOUR, 28
+        PRINT (L*100/TT)
+    SET FG_COLOUR, TCL
+
+    IF L=TT 
+        PRINT "WELL DONE.": GOTO C63
+    ELSE 
+        GOTO J960 
+    ENDIF
+
+C66:                                           ' (66) Inventory
+    SET FG_COLOUR, 28
+    PRINT "I'M CARRYING:"
+    SET FG_COLOUR, 58
+
+    K$="NOTHING"
+
+    FOR Z=0 TO IL
+        IF IA(Z)<>HELD 
+            GOTO C66B 
+        ELSE 
+            GOSUB STRIPSLASH
+        ENDIF
+        
+        Text$="   "+TP$
+        GOSUB PrintLine
+
+        K$=" "
+C66B:
+    NEXT Z 
+    PRINT K$:GOTO J960 
+
+C67: 
+    P=0:GOTO C58B
+
+C68: 
+    P=0:GOTO C60B
+
+C69:                                                       'Light Lamp
+    LX=LT:IA(9)=HELD:GOTO J960
+
+C70:                                                       ' (70) Clear Screen
+    If WaitCLS > 0 THEN WAIT(100):WaitCLS = 0
+
+    CLS
+    GOTO J960 
+
+C71:
+    PRINT "GAMES CANNOT BE SAVED AT MOMENT"
+    GOTO J960
+
+C72:                                           ' (72) SWAP ITEM
+    GOSUB J1050:
+    L=P:GOSUB J1050:
+'    PRINT "C72: L=";L;", P=";P:WAIT(200)
+    WAIT(50)                                   ' needed to stop crash !!
+    Z=IA(P)
+    IA(P)=IA(L):IA(L)=Z:GOTO J960               
+
+C73:                                           ' (73)
+    DONEXT=X+1
+    NV(0) = 0
+    GOTO J960
+
+C74:                                           ' (74)Auto Pickup Item
+    Redraw=0
+    GOSUB J1050
+    IF IA(P)=R THEN Redraw=1
+    IA(P)=HELD
+    IF Redraw > 0 
+        IF WaitCLS > 0 THEN WAIT(100):WaitCLS = 0
+        CLS:GOSUB WHEREAMI
+    ENDIF
+    GOTO J960
+
+C75:                                           ' (75) SWap Items in Room
+    Redraw = 0
+
+    GOSUB J1050:IONE=P
+    GOSUB J1050:ITWO=P
+				
+    IF IA(IONE)=R THEN Redraw = 1
+
+    IA(IONE)=IA(ITWO)
+    
+    IF IA(ITWO)=R THEN Redraw = 1
+
+    IF Redraw > 0 
+        IF WaitCLS > 0 THEN WAIT(100):WaitCLS = 0
+        CLS:GOSUB WHEREAMI
+    ENDIF
+    
+    GOTO J960 
+
+C77:                                           ' (77) Decement current counter
+    IF CURCOUNT > 0 THEN CURCOUNT=CURCOUNT-1
+    GOTO J960
+
+C78:                                           ' (78) Display Current Counter
+    SET FG_COLOUR, 28
+    PRINT CURCOUNT;" ";
+    SET FG_COLOUR, 58
+    
+    GOTO J960
+
+C79:                                           ' (79) Set Current Counter
+    GOSUB J1050
+    CURCOUNT = P
+    GOTO J960
+
+C80:                                           ' (80) Jump to save room and save old room
+    TEMP=R
+    R=SavedRoom
+    SavedRoom=TEMP
+    GOTO J960 
+
+C81:                                           ' (81) Select a counter. Current counter is swapped with backup counter
+    GOSUB J1050
+    TEMP = CURCOUNT
+    CURCOUNT=Counters(P)
+    Counters(P)=TEMP
+
+    GOTO J960
+
+C82:                                           ' (82) Add Value to Current Counter
+    GOSUB J1050
+    CURCOUNT = CURCOUNT + P
+    GOTO J960
+
+C83:                                           ' (83) Subtract Value from current counter
+    GOSUB J1050
+    IF P <= CURCOUNT
+        CURCOUNT = CURCOUNT-P
+    ELSE
+        CURCOUNT = -1
+    ENDIF
+    GOTO J960
+
+C84:                                           ' (84) Output Noun without Carriage Return
+    PRINT Noun$;" ";
+    GOTO J960
+
+C85:                                           ' (85) Output Noun
+    TCL = GET("FG_COLOUR")
+    SET FG_COLOUR, 7
+        PRINT Noun$
+    SET FG_COLOUR, TCL
+    GOTO J960 
+
+C86:                                           ' (86) Print Carriage return
+    PRINT
+    GOTO J960
+
+C87:                                           ' (87) Swap current room with saved room
+    GOSUB J1050
+
+    TEMP=R
+    R=SavedRooms(P)
+    SavedRooms(P)=TEMP
+    GOTO J960
+
+C88:                                           ' (88) wait 2 seconds
+    WAIT(200)
+    GOTO J960
+
+C89:                                           ' (89) wait 5 seconds
+    WAIT(500)
+    GOTO J960
+
+J960: 
+    NEXT U
+J970:
+    IF (DONEXT > 0) AND (CA(X+1,0) = 0) THEN GOTO DOLOOPX
+    IF NV(0) <> 0 THEN GOTO J990
+DOLOOPX:
+    IF X < CL THEN GOTO ACTIONLOOP
+
+J990:
+    IF NV(0)=0 THEN GOTO J1040
+    GOSUB J1060
+    IF F THEN PRINT "I DON'T UNDERSTAND YOUR COMMAND" :GOTO J1040 
+    IF F2=0 THEN PRINT "I CAN'T DO THAT YET" : GOTO J1040 
+J1040:
+    RETURN 
+
+J1050:
+    IP=IP+1
+    W=CA(X,IP)
+    P=W/20
+    M=W-(P*20)
+    IF M<>0 
+        GOTO J1050 
+    ELSE 
+        RETURN 
+    ENDIF
+
+J1060:
+    IF (NV(0) <> 10) AND (NV(0) <> 18) OR F3 > 0 THEN GOTO J1230 
+
+    IF NV(1)=0 THEN PRINT "WHAT?": GOTO J1180 
+    IF NV(0) <> 10 THEN GOTO J1110 
+    
+    L=0
+    FOR Z=0 TO IL
+        IF IA(Z)=HELD THEN L=L+1 
+    NEXT Z
+    IF L>=MX THEN PRINT Z$:GOTO J1180
+
+J1110:
+    KK=0
+    FOR X=0 TO IL                               ' Find Usable Item
+        IF RIGHT$(IA$(X),1)<>"/"                ' Can not be used
+            GOTO J1190 
+        ELSE 
+            LL=LEN(IA$(X))-1
+            TP$=MID$(IA$(X),0,LL)
+            FOR Y=2 TO LL:IF MID$(TP$,Y,1)<>"/" THEN NEXT Y: GOTO J1190
+        ENDIF
+
+    TP$=LEFT$(RIGHT$(TP$,LL-Y-1),LN)
+    IF RIGHT$(TP$,1)=" " THEN TP$=LEFT$(TP$,LN-1)
+    XX=NV(1)                                    ' Can't use array as ref to array
+    
+    LLL=LN                                      ' To adjust for shorter commands
+    FOR I=0 TO LN-1
+        IF ASC(MID$(TP$,I,1))=0 THEN LLL=I
+    NEXT I
+    TP$=LEFT$(TP$,LLL)
+
+    IF TP$<>NV$(XX*2+1) THEN GOTO J1190         ' Above adjustment needed to make comparison work
+
+    IF NV(0)=10 THEN GOTO J1160 
+
+    IF IA(X)<>HELD 
+        KK=1
+        GOTO J1190 
+    ELSE 
+        IA(X)=R
+        KK=3
+        GOTO J1170 
+    ENDIF
+
+J1160: 
+    IF IA(X)<>R 
+        KK=2 
+        GOTO J1190 
+    ELSE 
+        IA(X)=HELD
+        KK=3 
+    ENDIF
+J1170:
+    PRINT "OK "
+J1180: 
+    F=0: RETURN 
+
+J1190:          ' Drop or get item
+    NEXT X 
+
+    IF KK=1 
+        PRINT "I'M NOT CARRYING IT" 
+    ELSE 
+        IF KK=2 THEN PRINT "I DON'T SEE IT HERE"
+    ENDIF
+
+    IF KK=0 
+        IF NOT F3 THEN PRINT "ITS BEYOND MY POWER TO DO THAT":F=0
+    ENDIF
+
+    IF KK<>0 THEN F=0 
+
+J1230: 
+    RETURN 
+
+'********************************************************************************
+'*																				*
+'*                 ENHANCED PRINT ROUTINE FOR COLOUR AND SPACING                *
+'*																				*
+'********************************************************************************
+
+PrintLine:
+    TCL = GET("FG_COLOUR")
+
+    HON = 0
+    IF LEN(Text$) < 26
+        FOR II=0 TO LEN(Text$)
+            IF MID$(Text$, II, 1) = "~" 
+                IF HON = 0 
+                    SET FG_COLOUR, 7
+                    HON=1
+                ELSE
+                    SET FG_COLOUR, TCL
+                    HON=0
+                ENDIF
+            ELSEIF MID$(Text$, II, 1) = "*" 
+                IF HON = 0 
+                    SET FG_COLOUR, 11
+                    HON=1
+                ELSE
+                    SET FG_COLOUR, TCL
+                    HON=0
+                ENDIF
+            ELSE
+                PRINT MID$(Text$, II, 1);
+            ENDIF
+        NEXT II
+
+        IF NoLineBreak = 0 
+            PRINT " " 
+        ELSE 
+            PRINT " ";
+        ENDIF
+
+        RETURN
+    ENDIF
+
+    TP = 0
+    TX$=Text$
+
+TXLoop:
+    TX$ = LEFT$(TX$, 25)
+    TL=25
+    WHILE RIGHT$(TX$,1)<>" "
+        TL = TL-1
+        TX$=LEFT$(TX$,TL)
+    WEND
+    
+    FOR II=0 TO LEN(TX$)
+        IF MID$(TX$, II, 1) = "~"
+            IF HON = 0 
+                SET FG_COLOUR, 7
+                HON=1
+            ELSE
+                SET FG_COLOUR, TCL
+                HON=0
+            ENDIF
+        ELSEIF MID$(TX$, II, 1) = "*" 
+            IF HON = 0 
+                SET FG_COLOUR, 11
+                HON=1
+            ELSE
+                SET FG_COLOUR, TCL
+                HON=0
+            ENDIF
+        ELSE
+            PRINT MID$(TX$, II, 1);
+        ENDIF
+    NEXT II
+
+    TX$ = RIGHT$(Text$, LEN(Text$)-(TP+TL))
+    
+    IF LEN(TX$) < 26
+        FOR II=0 TO LEN(TX$)
+            IF MID$(TX$, II, 1) = "~"
+                IF HON = 0 
+                    SET FG_COLOUR, 7
+                    HON=1
+                ELSE
+                    SET FG_COLOUR, TCL
+                    HON=0
+                ENDIF
+            ELSEIF MID$(TX$, II, 1) = "*" 
+                IF HON = 0 
+                    SET FG_COLOUR, 11
+                    HON=1
+                ELSE
+                    SET FG_COLOUR, TCL
+                    HON=0
+                ENDIF
+            ELSE
+                PRINT MID$(TX$, II, 1);
+            ENDIF
+        NEXT II
+
+        IF NoLineBreak = 0 
+            PRINT " " 
+        ELSE 
+            PRINT " ";
+        ENDIF
+
+        RETURN
+    ENDIF
+
+    TP = TP+TL
+    GOTO TXLoop
+
+    RETURN
+
+'********************************************************************************
+'*																				*
+'*                          KEYBOARD CONTROL                                    *
+'*																				*
+'********************************************************************************
+
+WaitAnyKey:
+    SET FG_COLOUR, 58
+    PRINT:PRINT "Hit ";
+    SET FG_COLOUR, 28
+    PRINT "ANY KEY";
+    SET FG_COLOUR, 58
+    PRINT " to continue..."
+
+    jj = 255
+
+LOOPWaitAnyKey:
+        j = GET("SERIAL_RAW")
+        IF jj = 255
+            if j<>255 THEN GOTO EndWaitAnyKey
+        ENDIF
+        jj = j
+        GOTO LOOPWaitAnyKey
+
+EndWaitAnyKey:
+    RETURN
+
+
+WaitAnyKeyNoMessage:
+    jj = 255
+
+LOOPWaitAnyKeyNM:
+        j = GET("SERIAL_RAW")
+        IF jj = 255
+            if j<>255 THEN GOTO EndWaitAnyKeyNM
+        ENDIF
+        jj = j
+        GOTO LOOPWaitAnyKeyNM
+
+EndWaitAnyKeyNM:
+    RETURN
+
+
+
+WaitEnter:
+
+    PRINT:PRINT "Hit ";
+    SET FG_COLOUR, 28
+    PRINT "ENTER";
+    SET FG_COLOUR, 58
+    PRINT " to start"
+
+    jj = 255
+
+LOOPWaitEnter:
+        j = GET("SERIAL_RAW")
+        IF jj = 255
+            if j=10 THEN GOTO EndWaitEnter
+        ENDIF
+        jj = j
+    GOTO LOOPWaitEnter
+
+EndWaitEnter:
+
+    RETURN
+
+
+'********************************************************************************
+'*																				*
+'*                          DEBUGGING AID                                       *
+'*																				*
+'********************************************************************************
+
+J8000:
+    IF Debug=0
+        Debug=1
+        PRINT "Debug Mode is ON"
+    ELSE
+        Debug=0
+        PRINT "Debug Mode is OFF"
+    ENDIF
+    RETURN
+
+
+J9000:
+    PRINT "FALSE GOTO = ";AC-51
+    END
+
